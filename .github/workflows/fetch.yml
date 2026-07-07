@@ -1,0 +1,72 @@
+name: Fetch V2Ray Configs
+
+on:
+  schedule:
+    # ──────────────────────────────────────────
+    # Change the cron below to your desired cadence.
+    # Examples:
+    #   */30 * * * *   every 30 minutes
+    #   */15 * * * *   every 15 minutes
+    #   0 * * * *      every hour
+    # ──────────────────────────────────────────
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+env:
+  # ──────────────────────────────────────────
+  # Maximum size (in megabytes) per downloaded
+  # config file.  Increase or decrease as needed.
+  # ──────────────────────────────────────────
+  MAX_SIZE_MB: 10
+
+  TARGET_BRANCH: main
+
+jobs:
+  fetch-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reset branch to empty state
+        run: |
+          git checkout --orphan tmp-branch
+          git rm -rf .
+          Remove-Item -Force .gitattributes, .gitignore -ErrorAction SilentlyContinue
+
+      - name: Download config files (capped at ${{ env.MAX_SIZE_MB }} MB each)
+        shell: bash
+        run: |
+          SOURCE="https://raw.githubusercontent.com/ebrasha/free-v2ray-public-list/refs/heads/main"
+          LIMIT=$(( MAX_SIZE_MB * 1024 * 1024 ))
+
+          FILES=(
+            "V2Ray-Config-By-EbraSha-All-Type.txt"
+            "all_extracted_configs.txt"
+            "vless_configs.txt"
+            "trojan_configs.txt"
+            "vmess_configs.txt"
+            "ss_configs.txt"
+            "V2Ray-Config-By-EbraSha.txt"
+            "ssr_configs.txt"
+          )
+
+          for f in "${FILES[@]}"; do
+            echo "Downloading $f ..."
+            curl -sL "$SOURCE/$f" | head -c "$LIMIT" > "$f"
+          done
+
+      - name: Commit and force push (single commit, no history)
+        shell: bash
+        run: |
+          git add -A
+          git -c user.name="github-actions" \
+              -c user.email="github-actions@github.com" \
+              commit -m "auto-update $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push --force origin tmp-branch:$TARGET_BRANCH
