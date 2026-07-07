@@ -9,7 +9,7 @@ on:
     #   */15 * * * *   every 15 minutes
     #   0 * * * *      every hour
     # ──────────────────────────────────────────
-    - cron: '*/30 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
   push:
     branches: [main]
@@ -19,7 +19,7 @@ env:
   # Maximum size (in megabytes) per downloaded
   # config file.  Increase or decrease as needed.
   # ──────────────────────────────────────────
-  MAX_SIZE_MB: 10
+  MAX_SIZE_MB: 1
 
   TARGET_BRANCH: main
 
