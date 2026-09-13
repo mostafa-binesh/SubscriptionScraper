@@ -1,0 +1,79 @@
+name: Fetch V2Ray Configs
+
+on:
+  schedule:
+    # Minimum interval is 5 minutes (GitHub Actions limit).
+    # Examples: */5, */15, */30, 0 * * * *
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+env:
+  # ──────────────────────────────────────────
+  # Maximum size (in megabytes) per downloaded
+  # config file.  Increase or decrease as needed.
+  # ──────────────────────────────────────────
+  MAX_SIZE_MB: 2
+
+  TARGET_BRANCH: main
+
+jobs:
+  fetch-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Reset to empty state (preserve workflow)
+        shell: bash
+        run: |
+          # Save the workflow file, then wipe the working tree
+          cp .github/workflows/fetch.yml /tmp/fetch.yml
+          git checkout --orphan tmp-branch
+          # Remove all files from working tree (keeps .git)
+          for f in $(ls -A); do
+            [ "$f" = ".git" ] && continue
+            rm -rf "$f"
+          done
+          rm -f .gitattributes .gitignore 2>/dev/null || true
+          # Restore the workflow file so it survives the push
+          mkdir -p .github/workflows
+          cp /tmp/fetch.yml .github/workflows/fetch.yml
+
+      - name: Download config files (capped at ${{ env.MAX_SIZE_MB }} MB each)
+        shell: bash
+        run: |
+          SOURCE="https://raw.githubusercontent.com/ebrasha/free-v2ray-public-list/refs/heads/main"
+          LIMIT=$(( MAX_SIZE_MB * 1024 * 1024 ))
+
+          FILES=(
+            "V2Ray-Config-By-EbraSha-All-Type.txt"
+            "all_extracted_configs.txt"
+            "vless_configs.txt"
+            "trojan_configs.txt"
+            "vmess_configs.txt"
+            "ss_configs.txt"
+            "V2Ray-Config-By-EbraSha.txt"
+            "ssr_configs.txt"
+          )
+
+          for f in "${FILES[@]}"; do
+            echo "Downloading $f ..."
+            # head -c may SIGPIPE curl once limit reached; suppress that error
+            curl -sL --max-time 60 "$SOURCE/$f" | head -c "$LIMIT" > "$f" || true
+            wc -c "$f"
+          done
+
+      - name: Commit and force push (single commit, no history)
+        shell: bash
+        run: |
+          git add -A
+          git -c user.name="github-actions" \
+              -c user.email="github-actions@github.com" \
+              commit -m "auto-update $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push --force origin tmp-branch:$TARGET_BRANCH
